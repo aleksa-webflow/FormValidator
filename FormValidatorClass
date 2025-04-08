@@ -1,0 +1,154 @@
+<script>
+class FormValidator {
+    constructor(selector, options = {}) {
+        this.root = document.querySelector(selector);
+        this.options = {
+            minDigits: 6,
+            allowedChars: '- ',
+            firstDigits: '',
+            detectCountry: true,
+            disableSubmit: true,
+            ...options,
+        };
+
+        this.submitButton = this.root.querySelector('[fv-submit]');
+        this.phoneInput = this.root.querySelector('[fv-phone]');
+        this.emailInput = this.root.querySelector('[fv-email]');
+    }
+
+    mount() {
+        if (!this.root) return;
+
+        if (this.options.detectCountry) {
+            this.setCountryByLocation();
+        } else {
+            this.setFirstCountry();
+        }
+
+        this.setupCountryClickHandlers();
+        this.setupInputHandlers();
+        this.validateForm();
+    }
+
+    setFirstCountry() {
+        const firstCountry = this.root.querySelector('[fv-country]');
+        console.log(firstCountry);
+
+        if (firstCountry) {
+            setTimeout(() => {
+                firstCountry.click();
+            }, 0);
+        }
+    }
+
+    setCountryByLocation() {
+        fetch('https://ipwho.is/')
+            .then(res => res.json())
+            .then(data => {
+                if (data && data.country_code) {
+                    const countryElement = this.root.querySelector(`[data-country="${data.country_code.toUpperCase()}"]`);
+                    if (countryElement) countryElement.click();
+                }
+            })
+            .catch(console.error);
+    }
+
+    setupCountryClickHandlers() {
+        this.root.querySelectorAll('[fv-country]').forEach(country => {
+            country.addEventListener('click', () => {
+                const flag = country.querySelector('[fv-flag]');
+                const dial = country.querySelector('[fv-dial-code]');
+                const flagDropdown = this.root.querySelector('[fv-main-flag]');
+
+                if (flag && flagDropdown) flagDropdown.src = flag.src;
+
+                if (dial && this.phoneInput) {
+                    const dialCode = `+${dial.textContent.trim()} `;
+                    this.phoneInput.value = dialCode;
+                    this.phoneInput.setAttribute('fv-dial-code', dialCode);
+                    this.validateForm();
+                }
+            });
+        });
+    }
+
+    setupInputHandlers() {
+        if (this.phoneInput) {
+            this.phoneInput.addEventListener('input', () => {
+                const dialCode = this.phoneInput.getAttribute('fv-dial-code') || '';
+                let inputValue = this.phoneInput.value;
+
+                if (!inputValue.startsWith(dialCode)) {
+                    this.phoneInput.value = dialCode;
+                    return;
+                }
+
+                let userInput = inputValue.slice(dialCode.length);
+
+                const regexSafeChars = this.options.allowedChars.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+                const regex = new RegExp(`[^0-9${regexSafeChars}]`, 'g');
+                userInput = userInput.replace(regex, '');
+
+                const doubleSpecialRegex = new RegExp(`([${regexSafeChars}])\\1+`, 'g');
+                userInput = userInput.replace(doubleSpecialRegex, '$1');
+
+                if (
+                    userInput.length > 0 &&
+                    this.options.firstDigits &&
+                    !this.options.firstDigits.includes(userInput.charAt(0))
+                ) {
+                    userInput = userInput.slice(1);
+                }
+
+                if (userInput.length > 0 && !/^\d/.test(userInput.charAt(0))) {
+                    userInput = userInput.replace(/^./, '');
+                }
+
+                this.phoneInput.value = dialCode + userInput;
+                this.validateForm();
+            });
+        }
+
+        if (this.emailInput) {
+            this.emailInput.addEventListener('input', () => {
+                const email = this.emailInput.value.trim();
+                const regex = /^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+                if (!regex.test(email)) {
+                    this.emailInput.classList.add('invalid-email');
+                } else {
+                    this.emailInput.classList.remove('invalid-email');
+                }
+                this.validateForm();
+            });
+        }
+    }
+
+    validateForm() {
+        let isPhoneValid = true;
+        let isEmailValid = true;
+
+        if (this.phoneInput) {
+            const dialCode = this.phoneInput.getAttribute('fv-dial-code') || '';
+            const userInput = this.phoneInput.value.slice(dialCode.length);
+            const digitCount = (userInput.match(/\d/g) || []).length;
+            isPhoneValid = digitCount >= this.options.minDigits;
+        }
+
+        if (this.emailInput) {
+            const email = this.emailInput.value.trim();
+            const regex = /^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+            isEmailValid = regex.test(email);
+        }
+
+        if (this.submitButton && this.options.disableSubmit) {
+            if (isPhoneValid && isEmailValid) {
+                this.submitButton.classList.remove('fv-disable');
+            } else {
+                this.submitButton.classList.add('fv-disable');
+            }
+        } else if (this.submitButton && !this.options.disableSubmit) {
+            this.submitButton.classList.remove('fv-disable');
+        }
+    }
+}
+</script>
