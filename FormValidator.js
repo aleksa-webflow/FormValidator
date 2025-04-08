@@ -1,4 +1,3 @@
-<script>
 class FormValidator {
     constructor(selector, options = {}) {
         this.root = document.querySelector(selector);
@@ -151,4 +150,3 @@ class FormValidator {
         }
     }
 }
-</script>
