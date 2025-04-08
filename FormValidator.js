@@ -14,6 +14,7 @@ class FormValidator {
      * @param {boolean} [options.disableSubmit=true] - Whether to disable submit button until valid
      * @param {string} [options.errorClass='invalid'] - CSS class for error state
      * @param {string} [options.successClass='valid'] - CSS class for success state
+     * @param {string} [options.submitDisabledClass='fv-disable'] - CSS class for disabled submit button
      */
     constructor(selector, options = {}) {
         this.root = document.querySelector(selector);
@@ -30,6 +31,7 @@ class FormValidator {
             disableSubmit: true,
             errorClass: 'invalid',
             successClass: 'valid',
+            submitDisabledClass: 'fv-disable',
             ...options,
         };
 
@@ -272,7 +274,7 @@ class FormValidator {
         this.state.isValid = isPhoneValid && isEmailValid;
 
         if (this.elements.submitButton && this.options.disableSubmit) {
-            this.elements.submitButton.classList.toggle('fv-disable', !this.state.isValid);
+            this.elements.submitButton.classList.toggle(this.options.submitDisabledClass, !this.state.isValid);
         }
     }
 
