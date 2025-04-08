@@ -1,1 +1,286 @@
-class FormValidator{constructor(t,e={}){this.root=document.querySelector(t),this.options={minDigits:6,allowedChars:"- ",firstDigits:"",detectCountry:!0,disableSubmit:!0,...e},this.submitButton=this.root.querySelector("[fv-submit]"),this.phoneInput=this.root.querySelector("[fv-phone]"),this.emailInput=this.root.querySelector("[fv-email]")}mount(){this.root&&(this.options.detectCountry?this.setCountryByLocation():this.setFirstCountry(),this.setupCountryClickHandlers(),this.setupInputHandlers(),this.validateForm())}setFirstCountry(){let t=this.root.querySelector("[fv-country]");console.log(t),t&&setTimeout(()=>{t.click()},0)}setCountryByLocation(){fetch("https://ipwho.is/").then(t=>t.json()).then(t=>{if(t&&t.country_code){let e=this.root.querySelector(`[data-country="${t.country_code.toUpperCase()}"]`);e&&e.click()}}).catch(console.error)}setupCountryClickHandlers(){this.root.querySelectorAll("[fv-country]").forEach(t=>{t.addEventListener("click",()=>{let e=t.querySelector("[fv-flag]"),i=t.querySelector("[fv-dial-code]"),s=this.root.querySelector("[fv-main-flag]");if(e&&s&&(s.src=e.src),i&&this.phoneInput){let o=`+${i.textContent.trim()} `;this.phoneInput.value=o,this.phoneInput.setAttribute("fv-dial-code",o),this.validateForm()}})})}setupInputHandlers(){this.phoneInput&&this.phoneInput.addEventListener("input",()=>{let t=this.phoneInput.getAttribute("fv-dial-code")||"",e=this.phoneInput.value;if(!e.startsWith(t)){this.phoneInput.value=t;return}let i=e.slice(t.length),s=this.options.allowedChars.replace(/[-[\]{}()*+?.,\\^$|#\s]/g,"\\$&"),o=RegExp(`[^0-9${s}]`,"g");i=i.replace(o,"");let n=RegExp(`([${s}])\\1+`,"g");(i=i.replace(n,"$1")).length>0&&this.options.firstDigits&&!this.options.firstDigits.includes(i.charAt(0))&&(i=i.slice(1)),i.length>0&&!/^\d/.test(i.charAt(0))&&(i=i.replace(/^./,"")),this.phoneInput.value=t+i,this.validateForm()}),this.emailInput&&this.emailInput.addEventListener("input",()=>{let t=this.emailInput.value.trim();/^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(t)?this.emailInput.classList.remove("invalid-email"):this.emailInput.classList.add("invalid-email"),this.validateForm()})}validateForm(){let t=!0,e=!0;if(this.phoneInput){let i=this.phoneInput.getAttribute("fv-dial-code")||"",s=this.phoneInput.value.slice(i.length),o=(s.match(/\d/g)||[]).length;t=o>=this.options.minDigits}if(this.emailInput){let n=this.emailInput.value.trim();e=/^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(n)}this.submitButton&&this.options.disableSubmit?t&&e?this.submitButton.classList.remove("fv-disable"):this.submitButton.classList.add("fv-disable"):this.submitButton&&!this.options.disableSubmit&&this.submitButton.classList.remove("fv-disable")}}
+/**
+ * FormValidator class for handling form validation with phone and email inputs
+ * @class
+ */
+class FormValidator {
+    /**
+     * Create a new FormValidator instance
+     * @param {string} selector - CSS selector for the form root element
+     * @param {Object} options - Configuration options
+     * @param {number} [options.minDigits=6] - Minimum number of digits required in phone number
+     * @param {string} [options.allowedChars='- '] - Allowed special characters in phone number
+     * @param {string} [options.firstDigits=''] - Required first digits for phone number
+     * @param {boolean} [options.detectCountry=true] - Whether to detect user's country
+     * @param {boolean} [options.disableSubmit=true] - Whether to disable submit button until valid
+     * @param {string} [options.errorClass='invalid'] - CSS class for error state
+     * @param {string} [options.successClass='valid'] - CSS class for success state
+     */
+    constructor(selector, options = {}) {
+        this.root = document.querySelector(selector);
+        if (!this.root) {
+            console.error(`Form element not found with selector: ${selector}`);
+            return;
+        }
+
+        this.options = {
+            minDigits: 6,
+            allowedChars: '- ',
+            firstDigits: '',
+            detectCountry: true,
+            disableSubmit: true,
+            errorClass: 'invalid',
+            successClass: 'valid',
+            ...options,
+        };
+
+        this.elements = {
+            submitButton: this.root.querySelector('[fv-submit]'),
+            phoneInput: this.root.querySelector('[fv-phone]'),
+            emailInput: this.root.querySelector('[fv-email]'),
+            countryElements: this.root.querySelectorAll('[fv-country]'),
+            mainFlag: this.root.querySelector('[fv-main-flag]')
+        };
+
+        this.state = {
+            isValid: false,
+            phoneValid: false,
+            emailValid: false
+        };
+
+        this.eventListeners = new Map();
+    }
+
+    /**
+     * Initialize the form validator
+     */
+    mount() {
+        if (!this.root) return;
+
+        this.setupCountryDetection();
+        this.setupEventListeners();
+        this.validateForm();
+    }
+
+    /**
+     * Clean up event listeners and references
+     */
+    destroy() {
+        this.eventListeners.forEach((listener, element) => {
+            element.removeEventListener(listener.type, listener.fn);
+        });
+        this.eventListeners.clear();
+    }
+
+    /**
+     * Set up country detection based on user's location
+     * @private
+     */
+    setupCountryDetection() {
+        if (this.options.detectCountry) {
+            this.detectUserCountry();
+        } else {
+            this.setFirstCountry();
+        }
+    }
+
+    /**
+     * Detect user's country using IP geolocation
+     * @private
+     */
+    async detectUserCountry() {
+        try {
+            const response = await fetch('https://ipwho.is/');
+            const data = await response.json();
+            
+            if (data?.country_code) {
+                const countryElement = this.root.querySelector(`[fv-country="${data.country_code.toUpperCase()}"]`);
+                if (countryElement) {
+                    this.selectCountry(countryElement);
+                }
+            }
+        } catch (error) {
+            console.error('Failed to detect country:', error);
+            this.setFirstCountry();
+        }
+    }
+
+    /**
+     * Select the first available country
+     * @private
+     */
+    setFirstCountry() {
+        const firstCountry = this.elements.countryElements[0];
+        if (firstCountry) {
+            this.selectCountry(firstCountry);
+        }
+    }
+
+    /**
+     * Handle country selection
+     * @param {HTMLElement} countryElement - The selected country element
+     * @private
+     */
+    selectCountry(countryElement) {
+        const flag = countryElement.querySelector('[fv-flag]');
+        const dial = countryElement.querySelector('[fv-dial-code]');
+
+        if (flag && this.elements.mainFlag) {
+            this.elements.mainFlag.src = flag.src;
+        }
+
+        if (dial && this.elements.phoneInput) {
+            const dialCode = `+${dial.textContent.trim()} `;
+            this.elements.phoneInput.value = dialCode;
+            this.elements.phoneInput.setAttribute('fv-dial-code', dialCode);
+            this.validateForm();
+        }
+    }
+
+    /**
+     * Set up all event listeners
+     * @private
+     */
+    setupEventListeners() {
+        this.setupCountryClickHandlers();
+        this.setupInputHandlers();
+    }
+
+    /**
+     * Set up country selection event handlers
+     * @private
+     */
+    setupCountryClickHandlers() {
+        this.elements.countryElements.forEach(country => {
+            const handler = () => this.selectCountry(country);
+            country.addEventListener('click', handler);
+            this.eventListeners.set(country, { type: 'click', fn: handler });
+        });
+    }
+
+    /**
+     * Set up input field event handlers
+     * @private
+     */
+    setupInputHandlers() {
+        if (this.elements.phoneInput) {
+            const handler = () => this.handlePhoneInput();
+            this.elements.phoneInput.addEventListener('input', handler);
+            this.eventListeners.set(this.elements.phoneInput, { type: 'input', fn: handler });
+        }
+
+        if (this.elements.emailInput) {
+            const handler = () => this.handleEmailInput();
+            this.elements.emailInput.addEventListener('input', handler);
+            this.eventListeners.set(this.elements.emailInput, { type: 'input', fn: handler });
+        }
+    }
+
+    /**
+     * Handle phone input changes
+     * @private
+     */
+    handlePhoneInput() {
+        const dialCode = this.elements.phoneInput.getAttribute('fv-dial-code') || '';
+        let inputValue = this.elements.phoneInput.value;
+
+        if (!inputValue.startsWith(dialCode)) {
+            this.elements.phoneInput.value = dialCode;
+            return;
+        }
+
+        let userInput = inputValue.slice(dialCode.length);
+        userInput = this.sanitizePhoneInput(userInput);
+        this.elements.phoneInput.value = dialCode + userInput;
+        
+        this.validateForm();
+    }
+
+    /**
+     * Sanitize phone input according to rules
+     * @param {string} input - The user input to sanitize
+     * @returns {string} Sanitized input
+     * @private
+     */
+    sanitizePhoneInput(input) {
+        const regexSafeChars = this.options.allowedChars.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+        const regex = new RegExp(`[^0-9${regexSafeChars}]`, 'g');
+        input = input.replace(regex, '');
+
+        const doubleSpecialRegex = new RegExp(`([${regexSafeChars}])\\1+`, 'g');
+        input = input.replace(doubleSpecialRegex, '$1');
+
+        if (input.length > 0 && this.options.firstDigits && !this.options.firstDigits.includes(input.charAt(0))) {
+            input = input.slice(1);
+        }
+
+        if (input.length > 0 && !/^\d/.test(input.charAt(0))) {
+            input = input.replace(/^./, '');
+        }
+
+        return input;
+    }
+
+    /**
+     * Handle email input changes
+     * @private
+     */
+    handleEmailInput() {
+        const email = this.elements.emailInput.value.trim();
+        const isValid = this.validateEmail(email);
+        
+        this.elements.emailInput.classList.toggle(this.options.errorClass, !isValid);
+        this.elements.emailInput.classList.toggle(this.options.successClass, isValid);
+        
+        this.validateForm();
+    }
+
+    /**
+     * Validate email format
+     * @param {string} email - Email to validate
+     * @returns {boolean} Whether the email is valid
+     * @private
+     */
+    validateEmail(email) {
+        const regex = /^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+        return regex.test(email);
+    }
+
+    /**
+     * Validate the entire form
+     * @private
+     */
+    validateForm() {
+        let isPhoneValid = true;
+        let isEmailValid = true;
+
+        if (this.elements.phoneInput) {
+            const dialCode = this.elements.phoneInput.getAttribute('fv-dial-code') || '';
+            const userInput = this.elements.phoneInput.value.slice(dialCode.length);
+            const digitCount = (userInput.match(/\d/g) || []).length;
+            isPhoneValid = digitCount >= this.options.minDigits;
+            
+            this.elements.phoneInput.classList.toggle(this.options.errorClass, !isPhoneValid);
+            this.elements.phoneInput.classList.toggle(this.options.successClass, isPhoneValid);
+        }
+
+        if (this.elements.emailInput) {
+            isEmailValid = this.validateEmail(this.elements.emailInput.value);
+        }
+
+        this.state.phoneValid = isPhoneValid;
+        this.state.emailValid = isEmailValid;
+        this.state.isValid = isPhoneValid && isEmailValid;
+
+        if (this.elements.submitButton && this.options.disableSubmit) {
+            this.elements.submitButton.classList.toggle('fv-disable', !this.state.isValid);
+        }
+    }
+
+    /**
+     * Get the current validation state
+     * @returns {Object} Current validation state
+     */
+    getValidationState() {
+        return { ...this.state };
+    }
+}
